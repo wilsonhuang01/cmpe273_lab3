@@ -29,6 +29,17 @@ def remove_quantity(item_id, quantity):
         STOCK[item_id] = stock - quantity
         return STOCK[item_id]
 
+
+def add_quantity(item_id, quantity):
+    if type(quantity) is not int or quantity < 1:
+        raise ValueError("invalid_quantity")
+    with STOCK_LOCK:
+        stock = STOCK.get(item_id)
+        if stock is None:
+            return None
+        STOCK[item_id] = stock + quantity
+        return STOCK[item_id]
+
 @app.get("/health")
 def health():
     return jsonify(status="ok", service="inventory")
@@ -65,6 +76,19 @@ def remove_item(item_id):
     if remaining is False:
         return jsonify(error="insufficient_stock", item_id=item_id, stock=STOCK.get(item_id)), 409
     return jsonify(item_id=item_id, quantity=quantity, remaining=remaining)
+
+
+@app.post("/v1/items/<item_id>/add")
+def add_item(item_id):
+    payload = request.get_json(silent=True) or {}
+    try:
+        quantity = int(payload.get("quantity", ""))
+        available = add_quantity(item_id, quantity)
+    except (TypeError, ValueError):
+        return jsonify(error="invalid_quantity"), 400
+    if available is None:
+        return jsonify(error="item_not_found"), 404
+    return jsonify(item_id=item_id, quantity=quantity, available=available)
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5001, threaded=True)
